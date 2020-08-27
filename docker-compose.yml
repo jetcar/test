@@ -1,0 +1,58 @@
+version: '3.3'
+
+services:
+  zookeeper:
+    image: wurstmeister/zookeeper
+    ports:
+      - "2181"
+    hostname: zookeeper
+  kafka:
+    image: wurstmeister/kafka
+    ports:
+      - "9092:9092"
+    expose:
+      - "9093"
+    environment:
+      KAFKA_ADVERTISED_LISTENERS: INSIDE://kafka:9093,OUTSIDE://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INSIDE:PLAINTEXT,OUTSIDE:PLAINTEXT
+      KAFKA_LISTENERS: INSIDE://0.0.0.0:9093,OUTSIDE://0.0.0.0:9092
+      KAFKA_INTER_BROKER_LISTENER_NAME: INSIDE
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+    depends_on:
+      - "zookeeper"
+
+  redis:
+    image: 'bitnami/redis:latest'
+    ports:
+      - "6379:6379"
+    environment:
+      - REDIS_REPLICATION_MODE=master
+      - ALLOW_EMPTY_PASSWORD=yes
+
+  rest-service:
+    build: ./rest-service
+    ports:
+      - 8080:8080
+    depends_on:
+      - kafka
+    links:
+      - kafka
+    environment:
+      rest-service-port: 8080
+      kafka-host: kafka
+      kafka-port: 9093
+      redis-host: localhost
+      redis-port: 6379
+
+  receiver:
+    build: ./receiver
+    depends_on:
+      - kafka
+      - redis
+    links:
+      - kafka
+    environment:
+      kafka-host: kafka
+      kafka-port: 9093
+      redis-host: redis
+      redis-port: 6379
